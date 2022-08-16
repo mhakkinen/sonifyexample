@@ -1,0 +1,347 @@
+<html>
+<head>
+<title>Table Sonification Prototype</title>
+<!--
+Table Sonification Prototype
+Version 1.0  31 July 2015
+Hakkinen, Hansen, & White
+
+This prototype makes use of code snippets from:
+
+W3C Web Audio API:
+http://webaudio.github.io/web-audio-api/
+http://blog.chrislowis.co.uk/2013/06/05/playing-notes-web-audio-api.html
+
+
+
+The MIT License (MIT)
+
+Copyright (c) 2015 M. Hakkinen, E. Hansen, and J. White @ ETS
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+-->
+<style type="text/css">
+	body {font-family: trebuchet, sans-serif; font-size: .75em;}
+	.left{float:left; width:65%; overflow:hidden; background-color: #FFCC66; padding:5px; margin:5px;}
+	.right{overflow:hidden; padding:5px; margin:5px;}
+	table {margin: 5px;}
+</style>
+<script>
+	(function () {
+  // An array of all contexts to resume on the page
+  const audioContextList = [];
+
+  // An array of various user interaction events we should listen for
+  const userInputEventNames = [
+    'click',
+    'contextmenu',
+    'auxclick',
+    'dblclick',
+    'mousedown',
+    'mouseup',
+    'pointerup',
+    'touchend',
+    'keydown',
+    'keyup',
+  ];
+
+  // A proxy object to intercept AudioContexts and
+  // add them to the array for tracking and resuming later
+  self.AudioContext = new Proxy(self.AudioContext, {
+    construct(target, args) {
+      const result = new target(...args);
+      audioContextList.push(result);
+      return result;
+    },
+  });
+
+  // To resume all AudioContexts being tracked
+  function resumeAllContexts(event) {
+    let count = 0;
+
+    audioContextList.forEach(context => {
+      if (context.state !== 'running') {
+        context.resume();
+      } else {
+        count++;
+      }
+    });
+
+    // If all the AudioContexts have now resumed then we
+    // unbind all the event listeners from the page to prevent
+    // unnecessary resume attempts
+    if (count == audioContextList.length) {
+      userInputEventNames.forEach(eventName => {
+        document.removeEventListener(eventName, resumeAllContexts);
+      });
+    }
+  }
+
+  // We bind the resume function for each user interaction
+  // event on the page
+  userInputEventNames.forEach(eventName => {
+    document.addEventListener(eventName, resumeAllContexts);
+  });
+})();
+	var datamax=0;
+	var navMode=false;
+	context = new AudioContext;
+	navcontext = new AudioContext;
+	oscillator = context.createOscillator();
+	navoscillator=navcontext.createOscillator();
+	navoscillator.connect(navcontext.destination);
+	oscillator.connect(context.destination);
+	var curint=250;
+	var vca = context.createGain();
+	var vcn = navcontext.createGain();
+	navoscillator.frequency.value=0;
+	oscillator.frequency.value = 0;
+
+	vca.gain.value = 0;
+	vcn.gain.value=0;
+	oscillator.start(0);
+	navoscillator.start(0);
+	var playSeq=[];
+	var playCount=0;
+
+	var curSpeakCell=0;
+	var speakSeq=[];
+	var speakCount=0;
+	var msg = new SpeechSynthesisUtterance();
+	var voices = window.speechSynthesis.getVoices();
+
+function playInt() {
+
+	window.setTimeout(playCurrent,document.getElementById("durval").value);
+}
+
+function playCurrent() {
+      
+	vca.gain.value=1;
+	if (playCount<playSeq.length) {
+		oscillator.frequency.value = playSeq[playCount];
+       	playCount++;
+       	window.setTimeout(playCurrent,document.getElementById("durval").value);
+    }
+    else
+    {       	
+		vca.gain.value=0;
+       	playCount=0; 
+       	playSeq=[];
+       	window.setTimeout(playCurrent,curint);
+	}
+}
+
+function addrow() {
+
+	var dataTable=document.getElementById("t1");
+	var newRow=dataTable.insertRow();
+	var newCell=newRow.insertCell();
+	newCell.setAttribute('contenteditable',"true");
+	newCell.setAttribute("onfocus", "playCell(this);");
+	newCell.setAttribute("onblur", "stopCell(this);");
+	newCell.innerHTML=" ";
+	newCell.focus();
+}
+
+function sonify() {
+	
+    var result = 0;
+    datamax=0;
+    playSeq=[];
+    playCount=0;
+    var dataTable = window.document.getElementById("t1"); 		   
+    var tableBody = dataTable.getElementsByTagName("tbody").item(0);
+    var i;
+    var numRows = tableBody.rows.length;
+   
+    for (i=1; i<(numRows); i++) // skip first and last row (hence i=1, and howManyRows-1)
+    {
+       var thisTrElem = tableBody.rows[i];
+       var thisTdElem = thisTrElem.cells[0];			
+       var thisTextNode = thisTdElem.childNodes.item(0);
+       
+       // try to convert text to numeric
+
+       var thisNumber = parseFloat(thisTextNode.data);
+       if (thisNumber>datamax) {datamax=thisNumber;}
+       // if you didn't get back the value NaN (i.e. not a number), add into result
+       playSeq.push(thisNumber*document.getElementById("multival").value);
+       playSeq.push(0);
+
+       if (!isNaN(thisNumber))
+         result += thisNumber;
+	 } 
+}
+
+function navModeToggle() {
+	var dataTable = window.document.getElementById("t1"); 		   
+    var tableBody = dataTable.getElementsByTagName("tbody").item(0);
+    var i;
+    var numRows = tableBody.rows.length;
+	var el;
+	var thisTrElem;
+	var thisTdElem;
+
+	if (navMode==true) {
+		navMode=false;
+		el=document.getElementById('btnAddRow');
+		el.setAttribute('aria-hidden',"false");
+		el.hidden=false;
+		el=document.getElementById('btnNavMode');
+		el.innerHTML="Turn Nav Mode On";
+		for (i=0; i<(numRows); i++) // skip first and last row (hence i=1, and howManyRows-1)
+		{
+			thisTrElem = tableBody.rows[i];
+			thisTdElem = thisTrElem.cells[0];			
+			thisTdElem.setAttribute('contenteditable',"true");
+			thisTdElem.setAttribute('tabindex',"0");
+		} // end for
+	}
+	else
+	{
+		navMode=true;
+		el=document.getElementById('btnAddRow');
+		el.setAttribute('aria-hidden',"true");
+		el.hidden=true;
+		el=document.getElementById('btnNavMode');
+		el.innerHTML="Turn Nav Mode Off";
+		for (i=0; i<(numRows); i++) 
+		{
+			thisTrElem = tableBody.rows[i];
+			thisTdElem = thisTrElem.cells[0];			
+			thisTdElem.setAttribute('contenteditable',"false");
+				thisTdElem.setAttribute('tabindex',"0");
+		} // end for		
+	}
+}
+
+function playCell(tableCell){
+
+	tableCell.style.fontWeight = 'bold';
+	// TODO: TEST THIS.
+	//tableCell.setAttribute('aria-hidden', 'true');
+    var cfreq=tableCell.innerHTML*document.getElementById("multival").value;
+    navoscillator.frequency.value=cfreq;
+    vcn.gain.value=1;
+}
+
+function stopCell(tableCell){
+	tableCell.style.fontWeight = 'normal';
+    navoscillator.frequency.value=0;
+    vcn.gain.value=0;
+}
+
+function initSonification() {
+	playInt();
+}
+
+function speakIt() {
+    
+    var result = 0;
+    var waiter = true;
+    datamax=0;
+    playSeq=[];
+    playCount=0;
+    var dataTable = window.document.getElementById("t1");        
+    var tableBody = dataTable.getElementsByTagName("tbody").item(0);
+    var i;
+    var numRows = tableBody.rows.length;
+   
+    for (i=1; i<(numRows); i++) // skip first and last row (hence i=1, and howManyRows-1)
+    {
+       var thisTrElem = tableBody.rows[i];
+       var thisTdElem = thisTrElem.cells[0];      
+       var thisTextNode = thisTdElem.childNodes.item(0);
+       
+       // try to convert text to numeric
+
+       var thisNumber = parseFloat(thisTextNode.data);
+       if (thisNumber>datamax) {datamax=thisNumber;}
+       speakSeq.push(thisTextNode.data);
+
+       speakCount++;
+   } // end for
+   speakCell();
+}
+
+function speakCell() {
+
+	if (curSpeakCell<speakCount) {
+		msg.rate = 10; // 0.1 to 10
+		msg.pitch = (speakSeq[curSpeakCell]/datamax)*2; //0 to 2
+		msg.text = speakSeq[curSpeakCell];
+		msg.lang = 'en-US';
+		msg.onend = function(e) {
+           speakCell();
+		};
+		speechSynthesis.speak(msg);
+		curSpeakCell++;
+	}
+	else
+	{
+		curSpeakCell=0;
+		speakSeq=[];
+		speakCount=0;
+	}
+}
+</script>
+</head>
+<body onload="initSonification();">
+	<h1>Table Sonification Prototype</h1>
+	<div>Prototype developed by the ETS Accessibility Research Group - 07/2015</div>
+	<div>Questions/Comments to mhakkinen@ets.org</div>
+	<div class="wrapper">
+		<div class="left">
+			<h2>Instructions</h2>
+			<p>Add data values to the single column table. Use the Add Row button after the table to add rows. The table cells are editable.</p>
+			<p>Set the frequency multiplier and tone duration.  The frequency multiplier is used to map the data value in a given cell to an 
+			audible tone.  For example, if the data value is 23, and the multiplier is 10, the resulting frequency will be 230 Hertz. The tone 
+			duration is the length of time the tone will be audible for a given cell during sonification, and the same duration is used to create 
+			an interval of silence between tones.</p>
+			<p>Once you have values in the table, click the Sonify button to hear the data as a tone sequence. To navigate the cells using the 
+			tab key and hear the corresponding tones, use the Turn Nav Mode On/Off button, which makes the table data cells read only and plays 
+			the tone for as long as the focus is in a cell.</p>
+			<p>
+				<label>Frequency Multiplier: <input type="text" name="multi" id="multival" value="10"></label>
+			</p>
+			<p>
+				<label>Tone duration (in milliseconds): <input type="text" id="durval" name="dur" value="250"></label>
+			<p> 
+			<button onclick="sonify();">Sonify!</button> 
+			<button onclick="speakIt();">Speak it!</button></p>
+			<button id="btnNavMode" onclick="navModeToggle();">Turn Nav Mode On</button>
+		</div>  
+		<div class="right">
+			<h2>Data Table</h2>
+			<table id="t1" border=1>
+				<tr>
+					<th contenteditable="true">heading</th>
+				</tr>
+				<tr>
+					<td contenteditable="true" onfocus="playCell(this);" onblur="stopCell(this);"></td>
+				</tr>
+			</table>
+			<button id="btnAddRow" onclick="addrow();">Add Row</button>
+		</div>
+	</div>
+</body>
+</html>
+
